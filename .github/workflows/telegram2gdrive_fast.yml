@@ -100,26 +100,28 @@ jobs:
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
           echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
           
-      - name: Refresh outdated packages
-        run: |
-          source .venv/bin/activate
+- name: Refresh outdated packages
+  run: |
+    source .venv/bin/activate
 
-        pip install --upgrade pip
+    pip install --upgrade pip
 
-        OUTDATED=$(pip list --outdated --format=json)
+    OUTDATED=$(pip list --outdated --format=json)
 
-        if [ "$OUTDATED" != "[]" ]; then
-          echo "Updating outdated packages..."
-          pip install --upgrade \
-            yt-dlp \
-            telethon \
-            google-api-python-client \
-            google-auth \
-            google-auth-httplib2 \
-            google-auth-oauthlib
-        else
-          echo "All packages already latest."
-        fi
+    if [ "$OUTDATED" != "[]" ]; then
+      echo "Updating outdated packages..."
+
+      pip install --upgrade \
+        yt-dlp \
+        telethon \
+        google-api-python-client \
+        google-auth \
+        google-auth-httplib2 \
+        google-auth-oauthlib
+
+    else
+      echo "All packages already latest."
+    fi
 
       - name: Download Telegram media/files
         id: download
