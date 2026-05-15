@@ -1,0 +1,387 @@
+name: Direct Link → Google Drive
+
+on:
+  workflow_dispatch:
+    inputs:
+      file_url:
+        description: 'Direct download URL'
+        required: true
+        type: string
+
+      custom_name:
+        description: 'Optional custom filename'
+        required: false
+        type: string
+        default: ''
+
+      download_method:
+        description: 'Download method'
+        required: false
+        type: choice
+        default: auto
+        options:
+          - auto
+          - wget
+          - curl
+          - yt-dlp
+
+      gdrive_folder:
+        description: 'Google Drive folder ID, shared-folder URL, or folder path (example: Downloads/Movies)'
+        required: true
+        type: string
+
+jobs:
+  download-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # Cache dependencies to speed up future runs
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-directlink-gdrive-v1
+          restore-keys: |
+            ${{ runner.os }}-directlink-
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+
+          sudo apt-get install -y \
+            python3 \
+            python3-pip \
+            wget \
+            curl \
+            ffmpeg \
+            file
+
+          python3 -m pip install --upgrade pip
+
+          pip3 install \
+            yt-dlp \
+            google-api-python-client \
+            google-auth \
+            google-auth-httplib2 \
+            google-auth-oauthlib
+
+      # ============================================
+      # CREATE TEMP DIRECTORY
+      # ============================================
+
+      - name: Create temp folder
+        id: prep
+        run: |
+          python3 << 'EOF'
+          import os
+          import uuid
+
+          temp_dir = f"/tmp/directdl_{uuid.uuid4().hex}"
+
+          os.makedirs(temp_dir, exist_ok=True)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"temp_dir={temp_dir}\n")
+
+          print(temp_dir)
+          EOF
+
+      # ============================================
+      # DOWNLOAD FILE
+      # ============================================
+
+      - name: Download file
+        run: |
+          set -e
+
+          TEMP_DIR="${{ steps.prep.outputs.temp_dir }}"
+          METHOD="${{ github.event.inputs.download_method }}"
+          URL="${{ github.event.inputs.file_url }}"
+
+          echo "Download URL:"
+          echo "$URL"
+
+          # ============================================
+          # DOWNLOAD METHODS
+          # ============================================
+
+          download_with_wget() {
+
+            echo "Trying wget..."
+
+            cd "$TEMP_DIR"
+
+            wget \
+              --content-disposition \
+              --trust-server-names \
+              --user-agent="Mozilla/5.0" \
+              --tries=3 \
+              --timeout=60 \
+              "$URL"
+          }
+
+          download_with_curl() {
+
+            echo "Trying curl..."
+
+            cd "$TEMP_DIR"
+
+            curl \
+              -L \
+              -A "Mozilla/5.0" \
+              -OJ \
+              "$URL"
+          }
+
+          download_with_ytdlp() {
+
+            echo "Trying yt-dlp..."
+
+            yt-dlp \
+              --no-warnings \
+              --restrict-filenames \
+              --add-header "User-Agent: Mozilla/5.0" \
+              -o "$TEMP_DIR/%(title)s.%(ext)s" \
+              "$URL"
+          }
+
+          # ============================================
+          # VALIDATION
+          # ============================================
+
+          validate_download() {
+
+            FILE_COUNT=$(find "$TEMP_DIR" -type f | wc -l)
+
+            if [ "$FILE_COUNT" -eq 0 ]; then
+              return 1
+            fi
+
+            return 0
+          }
+
+          # ============================================
+          # DOWNLOAD LOGIC
+          # ============================================
+
+          if [ "$METHOD" = "wget" ]; then
+
+            download_with_wget
+
+          elif [ "$METHOD" = "curl" ]; then
+
+            download_with_curl
+
+          elif [ "$METHOD" = "yt-dlp" ]; then
+
+            download_with_ytdlp
+
+          else
+
+            echo "AUTO MODE"
+
+            download_with_wget || true
+
+            validate_download || download_with_curl || true
+
+            validate_download || download_with_ytdlp
+
+          fi
+
+          validate_download
+
+          echo "Downloaded files:"
+          find "$TEMP_DIR" -type f
+
+      # ============================================
+      # OPTIONAL CUSTOM RENAME
+      # ============================================
+
+      - name: Apply custom filename
+        if: ${{ github.event.inputs.custom_name != '' }}
+        run: |
+          python3 << 'EOF'
+
+          import os
+          import pathlib
+
+          temp_dir = os.environ['TEMP_DIR']
+          custom_name = os.environ['CUSTOM_NAME']
+
+          files = [
+              f for f in pathlib.Path(temp_dir).iterdir()
+              if f.is_file()
+          ]
+
+          if len(files) == 1:
+
+              old_file = files[0]
+
+              ext = old_file.suffix
+
+              new_name = custom_name
+
+              if not new_name.endswith(ext):
+                  new_name += ext
+
+              new_file = old_file.with_name(new_name)
+
+              old_file.rename(new_file)
+
+              print(f'Renamed to: {new_file.name}')
+
+          else:
+              print('Skipping rename because multiple files were downloaded')
+
+          EOF
+        env:
+          TEMP_DIR: ${{ steps.prep.outputs.temp_dir }}
+          CUSTOM_NAME: ${{ github.event.inputs.custom_name }}
+
+      # ============================================
+      # UPLOAD TO GOOGLE DRIVE
+      # ============================================
+
+      - name: Upload to Google Drive
+        run: |
+          python3 << 'EOF'
+
+          import os
+          import re
+          import pathlib
+
+          from google.oauth2.credentials import Credentials
+          from google.auth.transport.requests import Request
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+
+          temp_dir = os.environ['TEMP_DIR']
+          folder_input = os.environ['GDRIVE_FOLDER'].strip()
+
+          creds = Credentials(
+              None,
+              refresh_token=os.environ['GDRIVE_REFRESH_TOKEN'],
+              token_uri='https://oauth2.googleapis.com/token',
+              client_id=os.environ['GDRIVE_CLIENT_ID'],
+              client_secret=os.environ['GDRIVE_CLIENT_SECRET'],
+              scopes=['https://www.googleapis.com/auth/drive']
+          )
+
+          creds.refresh(Request())
+
+          service = build('drive', 'v3', credentials=creds)
+
+          def extract_folder_id(value):
+
+              value = value.strip()
+
+              # Shared folder URL
+              match = re.search(r'/folders/([a-zA-Z0-9_-]+)', value)
+
+              if match:
+                  return match.group(1)
+
+              # Raw folder ID
+              if re.fullmatch(r'[a-zA-Z0-9_-]{10,}', value):
+                  return value
+
+              return None
+
+          def get_or_create_folder(folder_name, parent_id=None):
+
+              query = (
+                  f"name = '{folder_name}' "
+                  f"and mimeType = 'application/vnd.google-apps.folder' "
+                  f"and trashed = false"
+              )
+
+              if parent_id:
+                  query += f" and '{parent_id}' in parents"
+
+              results = service.files().list(
+                  q=query,
+                  spaces='drive',
+                  fields='files(id, name)',
+                  pageSize=1
+              ).execute()
+
+              folders = results.get('files', [])
+
+              if folders:
+                  return folders[0]['id']
+
+              metadata = {
+                  'name': folder_name,
+                  'mimeType': 'application/vnd.google-apps.folder'
+              }
+
+              if parent_id:
+                  metadata['parents'] = [parent_id]
+
+              folder = service.files().create(
+                  body=metadata,
+                  fields='id'
+              ).execute()
+
+              return folder['id']
+
+          # ============================================
+          # Resolve Google Drive folder
+          # ============================================
+
+          folder_id = extract_folder_id(folder_input)
+
+          # Folder path mode
+          if not folder_id:
+
+              current_parent = None
+
+              for part in [p.strip() for p in folder_input.split('/') if p.strip()]:
+                  current_parent = get_or_create_folder(part, current_parent)
+
+              folder_id = current_parent
+
+          if not folder_id:
+              raise Exception('Could not resolve Google Drive folder')
+
+          print(f'Uploading to folder ID: {folder_id}')
+
+          uploaded = 0
+
+          for file_path in pathlib.Path(temp_dir).iterdir():
+
+              if not file_path.is_file():
+                  continue
+
+              print(f'Uploading: {file_path.name}')
+
+              file_metadata = {
+                  'name': file_path.name,
+                  'parents': [folder_id]
+              }
+
+              media = MediaFileUpload(
+                  str(file_path),
+                  resumable=True
+              )
+
+              service.files().create(
+                  body=file_metadata,
+                  media_body=media
+              ).execute()
+
+              uploaded += 1
+
+          print(f'Uploaded files: {uploaded}')
+
+          EOF
+        env:
+          TEMP_DIR: ${{ steps.prep.outputs.temp_dir }}
+          GDRIVE_FOLDER: ${{ github.event.inputs.gdrive_folder }}
+
+          GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
+          GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
+          GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
