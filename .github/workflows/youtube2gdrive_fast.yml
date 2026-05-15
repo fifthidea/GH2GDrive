@@ -1,0 +1,410 @@
+name: Youtube → Google Drive (FAST)
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_url:
+        description: 'YouTube video URL'
+        required: true
+        type: string
+
+      output_format:
+        description: 'Output type'
+        required: true
+        type: choice
+        options:
+          - mp4 (video)
+          - mp3 (audio only)
+        default: 'mp4 (video)'
+
+      desired_quality:
+        description: 'Quality preset (video: 144p|360p|480p|720p|1080p; audio: 64|128|192|320kbps)'
+        required: false
+        type: string
+        default: '720p'
+
+      gdrive_folder:
+        description: 'Google Drive folder ID, shared-folder URL, or folder path (example: Movies/YouTube)'
+        required: true
+        type: string
+
+jobs:
+  fetch-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # ============================================
+      # SETUP PYTHON
+      # ============================================
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # ============================================
+      # CACHE FULL VENV
+      # ============================================
+
+      - name: Cache virtual environment
+        id: cache-venv
+        uses: actions/cache@v4
+        with:
+          path: |
+            .venv
+            ~/.cache/pip
+          key: >
+            ${{ runner.os }}-youtube2gdrive-
+            ${{ hashFiles('.github/youtube2gdrive-requirements.txt') }}
+
+      # ============================================
+      # CREATE REQUIREMENTS FILE
+      # ============================================
+
+      - name: Create requirements file
+        run: |
+          mkdir -p .github
+
+          cat > .github/youtube2gdrive-requirements.txt << 'EOF'
+          requests
+          yt-dlp
+          google-api-python-client
+          google-auth
+          google-auth-httplib2
+          google-auth-oauthlib
+          EOF
+
+      # ============================================
+      # INSTALL DEPENDENCIES
+      # ============================================
+
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update -qq
+
+          sudo apt-get install -y \
+            curl \
+            jq
+
+          python -m venv .venv
+
+          source .venv/bin/activate
+
+          python -m pip install --upgrade pip wheel setuptools
+
+          pip install -r .github/youtube2gdrive-requirements.txt
+
+      # ============================================
+      # ACTIVATE VENV
+      # ============================================
+
+      - name: Activate virtual environment
+        run: |
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
+          
+      - name: Refresh outdated packages
+        run: |
+          source .venv/bin/activate
+
+        pip install --upgrade pip
+
+        OUTDATED=$(pip list --outdated --format=json)
+
+        if [ "$OUTDATED" != "[]" ]; then
+          echo "Updating outdated packages..."
+          pip install --upgrade \
+            yt-dlp \
+            telethon \
+            google-api-python-client \
+            google-auth \
+            google-auth-httplib2 \
+            google-auth-oauthlib
+        else
+          echo "All packages already latest."
+        fi
+
+      - name: Retrieve media file
+        id: retrieval
+        run: |
+          python3 << 'EOF'
+          import os
+          import sys
+          import time
+          import re
+          import json
+          import requests
+          import subprocess
+
+          URL = os.environ.get('INPUT_URL')
+          FMT = os.environ.get('INPUT_FORMAT')
+          QUAL = os.environ.get('INPUT_QUALITY')
+
+          OUT_DIR = 'downloads'
+
+          # Normalize quality
+          if FMT == 'mp3':
+              if QUAL not in ('64kbps','128kbps','192kbps','320kbps'):
+                  QUAL = '192kbps'
+          else:
+              if QUAL not in ('144p','360p','480p','720p','1080p'):
+                  QUAL = '720p'
+
+          # Build API payload
+          pl = {
+              "url": URL,
+              "os": "linux",
+              "output": {
+                  "type": "audio" if FMT == "mp3" else "video",
+                  "format": FMT
+              },
+          }
+
+          if FMT == 'mp3':
+              pl["audio"] = {"bitrate": QUAL}
+          else:
+              pl["output"]["quality"] = QUAL
+
+          s = requests.Session()
+          s.headers.update({
+              "User-Agent": "Mozilla/5.0",
+              "Content-Type": "application/json"
+          })
+
+          s.get("https://media.ytmp3.gg/")
+
+          resp = s.post(
+              "https://hub.ytconvert.org/api/download",
+              json=pl,
+              timeout=30
+          )
+
+          resp.raise_for_status()
+
+          d = resp.json()
+
+          status_url = d.get('statusUrl')
+
+          # Wait for conversion
+          dl = None
+
+          for _ in range(90):
+              time.sleep(2)
+
+              sr = s.get(status_url, timeout=15)
+              sd = sr.json()
+
+              if sd.get('status') == 'completed':
+                  dl = sd.get('downloadUrl')
+                  break
+
+              if sd.get('status') == 'failed':
+                  print("Conversion failed")
+                  sys.exit(1)
+
+          if not dl:
+              print("Download URL not received")
+              sys.exit(1)
+
+          # Extract video ID
+          v_id = (
+              re.search(r'(?:v=|\/)([a-zA-Z0-9_-]{11})', URL)
+              or ['', 'unknown']
+          )[1]
+
+          # Fetch REAL title from YouTube using yt-dlp
+          title = None
+
+          try:
+              meta_raw = subprocess.check_output([
+                  "yt-dlp",
+                  "--dump-single-json",
+                  URL
+              ], text=True)
+
+              meta = json.loads(meta_raw)
+
+              title = meta.get("title")
+
+          except Exception as e:
+              print("yt-dlp metadata fetch failed:", e)
+
+          # Fallbacks
+          if not title:
+              title = d.get("title")
+
+          if not title:
+              title = v_id
+
+          # Clean filename while preserving Unicode
+          clean_title = re.sub(r'[\\/*?:"<>|]', '_', title).strip()
+
+          # Avoid absurdly long filenames
+          clean_title = clean_title[:120]
+
+          fname = f"{clean_title}_{v_id}_{QUAL}.{FMT}"
+
+          os.makedirs(OUT_DIR, exist_ok=True)
+
+          with open(os.path.join(OUT_DIR, ".download_info"), "w", encoding="utf-8") as df:
+              df.write(f"{dl}\n{fname}\n{FMT}\n{QUAL}")
+
+          print(f"Final filename: {fname}")
+
+          EOF
+        env:
+          INPUT_URL: ${{ github.event.inputs.video_url }}
+          INPUT_FORMAT: ${{ github.event.inputs.output_format == 'mp3 (audio only)' && 'mp3' || 'mp4' }}
+          INPUT_QUALITY: ${{ github.event.inputs.desired_quality }}
+
+      - name: Download binary
+        run: |
+          OUTPUT_FOLDER="downloads"
+          INFO="$OUTPUT_FOLDER/.download_info"
+
+          DL_URL=$(head -1 "$INFO")
+          FILE_NAME=$(sed -n '2p' "$INFO")
+
+          curl -L --fail --retry 5 \
+            -o "$OUTPUT_FOLDER/$FILE_NAME" \
+            "$DL_URL"
+
+          echo "Downloaded:"
+          echo "$FILE_NAME"
+
+      - name: Upload to Google Drive
+        run: |
+          python3 << 'EOF'
+          import os
+          import re
+
+          from google.oauth2.credentials import Credentials
+          from google.auth.transport.requests import Request
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+
+          output_folder = 'downloads'
+
+          info_file = os.path.join(output_folder, ".download_info")
+
+          with open(info_file, "r", encoding="utf-8") as f:
+              lines = f.read().splitlines()
+
+          file_name = lines[1]
+          file_path = os.path.join(output_folder, file_name)
+
+          folder_input = os.environ["GDRIVE_FOLDER"].strip()
+
+          creds = Credentials(
+              None,
+              refresh_token=os.environ["GDRIVE_REFRESH_TOKEN"],
+              token_uri="https://oauth2.googleapis.com/token",
+              client_id=os.environ["GDRIVE_CLIENT_ID"],
+              client_secret=os.environ["GDRIVE_CLIENT_SECRET"],
+              scopes=["https://www.googleapis.com/auth/drive"]
+          )
+
+          creds.refresh(Request())
+
+          service = build("drive", "v3", credentials=creds)
+
+          def extract_folder_id(value):
+              value = value.strip()
+
+              # Full Google Drive folder URL
+              match = re.search(r'/folders/([a-zA-Z0-9_-]+)', value)
+              if match:
+                  return match.group(1)
+
+              # Raw folder ID
+              if re.fullmatch(r'[a-zA-Z0-9_-]{10,}', value):
+                  return value
+
+              return None
+
+          def get_or_create_folder(folder_name, parent_id=None):
+              query = (
+                  f"name = '{folder_name}' "
+                  f"and mimeType = 'application/vnd.google-apps.folder' "
+                  f"and trashed = false"
+              )
+
+              if parent_id:
+                  query += f" and '{parent_id}' in parents"
+
+              results = service.files().list(
+                  q=query,
+                  spaces='drive',
+                  fields='files(id, name)',
+                  pageSize=1
+              ).execute()
+
+              folders = results.get('files', [])
+
+              if folders:
+                  return folders[0]['id']
+
+              metadata = {
+                  'name': folder_name,
+                  'mimeType': 'application/vnd.google-apps.folder'
+              }
+
+              if parent_id:
+                  metadata['parents'] = [parent_id]
+
+              folder = service.files().create(
+                  body=metadata,
+                  fields='id'
+              ).execute()
+
+              return folder['id']
+
+          # Option 1: Shared folder URL or raw folder ID
+          folder_id = extract_folder_id(folder_input)
+
+          # Option 2: Folder path like Movies/YouTube
+          if not folder_id:
+              current_parent = None
+
+              for part in [p.strip() for p in folder_input.split('/') if p.strip()]:
+                  current_parent = get_or_create_folder(part, current_parent)
+
+              folder_id = current_parent
+
+          if not folder_id:
+              raise Exception("Could not resolve Google Drive folder")
+
+          file_metadata = {
+              "name": file_name,
+              "parents": [folder_id]
+          }
+
+          media = MediaFileUpload(
+              file_path,
+              resumable=True
+          )
+
+          uploaded = service.files().create(
+              body=file_metadata,
+              media_body=media,
+              fields="id"
+          ).execute()
+
+          print("UPLOAD SUCCESS")
+          print("FILE ID:", uploaded["id"])
+          print("UPLOADED TO FOLDER:", folder_id)
+
+          # Cleanup
+          os.remove(file_path)
+          os.remove(info_file)
+
+          EOF
+        env:
+          GDRIVE_FOLDER: ${{ github.event.inputs.gdrive_folder }}
+          GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
+          GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
+          GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
