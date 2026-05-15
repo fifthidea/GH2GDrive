@@ -35,7 +35,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-telegram-gdrive-v1
+          key: ${{ runner.os }}-telegram-gdrive-v2
           restore-keys: |
             ${{ runner.os }}-telegram-
 
@@ -64,13 +64,11 @@ jobs:
           import uuid
           import asyncio
           import subprocess
-          import sys
 
           from telethon import TelegramClient
           from telethon.sessions import StringSession
 
           tg_url = os.environ["TG_LINK"]
-
           method = os.environ.get("DOWNLOAD_METHOD", "yt-dlp")
 
           temp_dir = f"/tmp/tgdl_{uuid.uuid4().hex}"
@@ -158,33 +156,32 @@ jobs:
           # YT-DLP DOWNLOAD
           # --------------------------------------------------
 
-        def ytdlp_download():
+          def ytdlp_download():
 
-            print("Using yt-dlp download method...")
+              print("Using yt-dlp download method...")
 
-            cmd = [
-                "yt-dlp",
-                "--ignore-errors",
-                "--no-playlist",
+              cmd = [
+                  "yt-dlp",
+                  "--ignore-errors",
+                  "--no-playlist",
 
-                # IMPORTANT FIXES
-                "--restrict-filenames",
-                "--trim-filenames", "80",
+                  # FIX FOR LONG TELEGRAM FILENAMES
+                  "--restrict-filenames",
+                  "--trim-filenames", "80",
 
-                # Short predictable filenames
-                "-o",
-                os.path.join(
-                    temp_dir,
-                    "%(id)s_%(title).80s.%(ext)s"
-                ),
+                  "-o",
+                  os.path.join(
+                      temp_dir,
+                      "%(id)s_%(title).80s.%(ext)s"
+                  ),
 
-                tg_url
-            ]
+                  tg_url
+              ]
 
-            result = subprocess.run(cmd)
+              result = subprocess.run(cmd)
 
-            if result.returncode != 0:
-                raise Exception("yt-dlp download failed")
+              if result.returncode != 0:
+                  raise Exception("yt-dlp download failed")
 
           # --------------------------------------------------
           # MAIN LOGIC
@@ -252,10 +249,12 @@ jobs:
           service = build("drive", "v3", credentials=creds)
 
           def extract_folder_id(value):
+
               value = value.strip()
 
               # Full folder URL
               match = re.search(r'/folders/([a-zA-Z0-9_-]+)', value)
+
               if match:
                   return match.group(1)
 
@@ -303,13 +302,11 @@ jobs:
 
               return folder['id']
 
-          # --------------------------------------------------
-          # Resolve target Google Drive folder
-          # --------------------------------------------------
+          # Resolve Google Drive folder
 
           folder_id = extract_folder_id(folder_input)
 
-          # Folder path mode (example: Telegram/Movies)
+          # Folder path mode
           if not folder_id:
 
               current_parent = None
@@ -322,7 +319,7 @@ jobs:
           if not folder_id:
               raise Exception("Could not resolve Google Drive folder")
 
-          print(f"Uploading files to folder ID: {folder_id}")
+          print(f"Uploading to folder ID: {folder_id}")
 
           uploaded = 0
 
