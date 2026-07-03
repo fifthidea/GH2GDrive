@@ -66,7 +66,7 @@ This repository contains ready-to-use workflows for downloading files from multi
 Rename the downloaded file to:
 
 ```
-secret_client.json
+client_secret.json
 ```
 
 ---
