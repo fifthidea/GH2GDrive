@@ -90,12 +90,12 @@ This repository includes **token_gen.py**, which automatically generates all req
 ## Requirements
 
 * Python 3
-* `secret_client.json` downloaded from Google Cloud
+* `client_secret.json` downloaded from Google Cloud
 
 Place both files in the same directory:
 
 ```
-secret_client.json
+client_secret.json
 token_gen.py
 ```
 
