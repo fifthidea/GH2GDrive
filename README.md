@@ -1,180 +1,252 @@
 # GH2GDrive
 
-Automate downloading files from multiple sources and upload them directly to Google Drive using GitHub Actions.
+Upload files directly to **Google Drive** using GitHub Actions.
 
-This repository provides ready-to-use GitHub Actions workflows for:
-
-- 📥 Direct download links → Google Drive
-- 📺 YouTube videos/audio → Google Drive
-- 💬 Telegram files → Google Drive
-
-Everything runs on GitHub's hosted runners—no local server or VPS required.
+This repository contains ready-to-use workflows for downloading files from multiple sources (Direct URLs, YouTube, Telegram, etc.) and automatically uploading them to your Google Drive.
 
 ---
 
 ## Features
 
-- ✅ Download files from direct URLs
-- ✅ Download YouTube videos or extract audio
-- ✅ Download files from Telegram posts
-- ✅ Upload directly to Google Drive
-- ✅ Manual execution using GitHub Actions
-- ✅ Standard and FAST workflow variants
-- ✅ Supports custom filenames
-- ✅ Supports Google Drive folder IDs, shared folder URLs, or folder paths
+* 📥 Direct URL → Google Drive
+* 📺 YouTube Video/Audio → Google Drive
+* 💬 Telegram → Google Drive
+* ⚡ FAST workflow variants with dependency caching
+* 📁 Supports Google Drive Folder IDs, URLs, and paths
+* 🚀 Runs entirely on GitHub Actions (no VPS required)
 
 ---
 
-## Repository Structure
+# Initial Google Cloud Setup (One-Time)
+
+> **Note:** It is recommended to perform the Google Cloud setup using a clean Google account and a US IP address.
+
+## 1. Create a Google Cloud Project
+
+1. Go to https://console.cloud.google.com
+2. Sign in with your Google account.
+3. Create a new project (the project name can be anything).
+
+---
+
+## 2. Enable Google Drive API
+
+1. Open **APIs & Services → Enabled APIs & Services**.
+2. Make sure your newly created project is selected.
+3. Click **Enable APIs and Services**.
+4. Search for **Google Drive API**.
+5. Enable it.
+
+---
+
+## 3. Configure OAuth Consent Screen
+
+1. Open **APIs & Services → Credentials**.
+2. Click **Create Credentials → OAuth Client ID**.
+3. If prompted, click **Configure Consent Screen**.
+4. Click **Get Started**.
+5. Enter any App Name.
+6. Use your Google account as the Support Email.
+7. Select **External** as the Audience.
+8. Enter a Contact Email.
+9. Accept the Google API User Data Policy.
+10. Finish creating the consent screen.
+
+---
+
+## 4. Create OAuth Credentials
+
+1. Return to **Credentials**.
+2. Click **Create Credentials → OAuth Client ID**.
+3. Select **Desktop App**.
+4. Enter any name.
+5. Click **Create**.
+6. Download the OAuth credentials JSON file.
+
+Rename the downloaded file to:
 
 ```
-.github/
-└── workflows/
-    ├── direct2gdrive.yml
-    ├── direct2gdrive_fast.yml
-    ├── telegram2gdrive.yml
-    ├── telegram2gdrive_fast.yml
-    ├── youtube2gdrive.yml
-    └── youtube2gdrive_fast.yml
+secret_client.json
 ```
 
 ---
 
-# Required GitHub Secrets
+## 5. Add Test Users
 
-Before running any workflow, configure the following repository secrets.
+1. Open the **Audience** section of the OAuth Consent Screen.
+2. Under **Test Users**, click **Add Users**.
+3. Add the Gmail addresses that should be allowed to authorize the application.
 
-## Google Drive
+Only Gmail accounts listed here can generate refresh tokens and access their own Google Drive through this application.
 
-| Secret | Description |
-|---------|-------------|
-| `GDRIVE_CLIENT_ID` | Google OAuth Client ID |
-| `GDRIVE_CLIENT_SECRET` | Google OAuth Client Secret |
-| `GDRIVE_REFRESH_TOKEN` | Google OAuth Refresh Token |
+Google Cloud configuration is now complete.
 
 ---
 
-## Telegram (Telegram workflows only)
+# Generate Google Drive Tokens
 
-| Secret | Description |
-|---------|-------------|
-| `TG_API_ID` | Telegram API ID |
-| `TG_API_HASH` | Telegram API Hash |
-| `TG_SESSION` | Telegram session string |
+This repository includes **token_gen.py**, which automatically generates all required GitHub Secrets.
 
----
+## Requirements
 
-# Available Workflows
+* Python 3
+* `secret_client.json` downloaded from Google Cloud
 
-## Direct Link → Google Drive
+Place both files in the same directory:
 
-Downloads a file from a direct URL and uploads it to Google Drive.
+```
+secret_client.json
+token_gen.py
+```
 
-Typical inputs:
+Run:
 
-- File URL
-- Optional custom filename
-- Download method
-- Destination Google Drive folder
+```bash
+python token_gen.py
+```
 
----
+Your browser will open.
 
-## YouTube → Google Drive
+1. Sign in using one of the **Test Users** you added earlier.
+2. Click **Continue**.
+3. Approve the requested Google Drive permissions.
 
-Downloads a YouTube video or extracts audio before uploading to Google Drive.
+The script will print three values similar to:
 
-Typical inputs:
+```text
+GDRIVE_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
 
-- Video URL
-- Output format
-  - MP4 (video)
-  - MP3 (audio)
-- Desired quality
-- Destination Google Drive folder
+GDRIVE_CLIENT_SECRET=XXXXXXXXXXXXXXXXXXXXXXXX
 
----
+GDRIVE_REFRESH_TOKEN=1//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
 
-## Telegram → Google Drive
-
-Downloads media from a Telegram post and uploads it to Google Drive.
-
-Typical inputs:
-
-- Telegram post link
-- Destination Google Drive folder
-- Download method
+Save these values—you'll need them in GitHub.
 
 ---
 
-# FAST Workflows
+# Configure GitHub Secrets
 
-Each workflow has a corresponding **FAST** version.
+Open your repository and navigate to:
 
-These workflows are optimized for faster execution while providing the same functionality.
+```
+Settings
+└── Secrets and variables
+    └── Actions
+```
 
-Examples:
+Create the following Repository Secrets:
 
-- Direct Link → Google Drive (FAST)
-- Telegram → Google Drive (FAST)
-- YouTube → Google Drive (FAST)
-
----
-
-# Usage
-
-1. Fork this repository.
-2. Add the required GitHub Secrets.
-3. Open the **Actions** tab.
-4. Select the desired workflow.
-5. Click **Run workflow**.
-6. Fill in the required inputs.
-7. Wait for the workflow to finish.
-8. Your files will be available in your Google Drive.
+| Secret               | Value                     |
+| -------------------- | ------------------------- |
+| GDRIVE_CLIENT_ID     | Generated by token_gen.py |
+| GDRIVE_CLIENT_SECRET | Generated by token_gen.py |
+| GDRIVE_REFRESH_TOKEN | Generated by token_gen.py |
 
 ---
 
-# Google Drive Folder Formats
+# Configure GitHub Actions
 
-The workflows accept any of the following:
+Go to:
 
-- Folder ID
-- Shared folder URL
-- Folder path
+```
+Settings
+└── Actions
+    └── General
+```
 
-Examples:
+Configure:
+
+### Actions permissions
+
+Enable:
+
+```
+Allow all actions and reusable workflows
+```
+
+### Workflow permissions
+
+Select:
+
+```
+Read and write permissions
+```
+
+Save the changes.
+
+---
+
+# Running a Workflow
+
+1. Open the **Actions** tab.
+2. Select the workflow you want to run.
+3. Click **Run workflow**.
+4. Fill in the required inputs.
+5. Start the workflow.
+
+Your files will automatically be uploaded to Google Drive when the workflow completes.
+
+---
+
+# Workflow Variants
+
+Each workflow has two versions.
+
+## Standard
+
+Every run installs all required dependencies from scratch.
+
+Typical startup time:
+
+* **60–75 seconds**
+
+---
+
+## FAST
+
+The FAST version caches the Python virtual environment and dependencies.
+
+* The first run takes about the same time as the standard workflow.
+* Subsequent runs reuse the cache and typically start **15–30 seconds faster**.
+
+If you run workflows frequently, the FAST variants are recommended.
+
+---
+
+# Google Drive Folder Input
+
+Workflows accept any of the following formats:
+
+### Folder ID
 
 ```
 1AbCdEfGhIjKlMnOpQrStUvWxYz
-
-https://drive.google.com/drive/folders/1AbCdEfGhIjKlMn
-
-Movies
-
-Downloads/Anime
-
-Telegram/Movies
 ```
 
----
+### Folder URL
 
-# Requirements
+```
+https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz
+```
 
-- GitHub account
-- Google Drive API credentials
-- Configured Google OAuth Refresh Token
-- Telegram API credentials (Telegram workflows only)
+### Folder Path
 
----
-
-# Notes
-
-- Files are processed on GitHub-hosted runners.
-- Large downloads may be limited by GitHub Actions runtime restrictions.
-- Ensure your Google Drive account has sufficient storage space.
-- Some download sources may impose their own rate limits or restrictions.
+```
+Movies
+Downloads/Anime
+Telegram/Movies
+```
+### Telethon
+if you want to use Telethon, these secrets are required. if not present, it will fallback to yt-dlp.
+| Secret               |
+| -------------------- |
+| TG_SESSION           |
+| TG_API_ID            |
+| TG_API_HASH          |
 
 ---
 
 # License
 
-This project is provided as-is. Feel free to modify and use it for your own workflows.
+This project is provided as-is. Feel free to modify and use it in your own projects.
