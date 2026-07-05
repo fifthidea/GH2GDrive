@@ -57,12 +57,11 @@ This repository contains ready-to-use workflows for downloading files from multi
 
 ## 4. Create OAuth Credentials
 
-1. Return to **Credentials**.
-2. Click **Create Credentials → OAuth Client ID**.
-3. Select **Desktop App**.
+1. Click **Credentials → Create OAuth Client ID**.
+3. Select **Desktop App** for Application type.
 4. Enter any name.
 5. Click **Create**.
-6. Download the OAuth credentials JSON file.
+6. Download the OAuth credentials JSON file. This is Important.
 
 Rename the downloaded file to:
 
@@ -78,7 +77,7 @@ client_secret.json
 2. Under **Test Users**, click **Add Users**.
 3. Add the Gmail addresses that should be allowed to authorize the application.
 
-Only Gmail accounts listed here can generate refresh tokens and access their own Google Drive through this application.
+> Only Gmail accounts listed here can generate refresh tokens and access their own Google Drive through this application.
 
 Google Cloud configuration is now complete.
 
@@ -115,11 +114,11 @@ Your browser will open.
 The script will print three values similar to:
 
 ```text
-GDRIVE_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
+GDRIVE_CLIENT_ID = xxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
 
-GDRIVE_CLIENT_SECRET=XXXXXXXXXXXXXXXXXXXXXXXX
+GDRIVE_CLIENT_SECRET = XXXXXXXXXXXXXXXXXXXXXXXX
 
-GDRIVE_REFRESH_TOKEN=1//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+GDRIVE_REFRESH_TOKEN = 1//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
 Save these values—you'll need them in GitHub.
