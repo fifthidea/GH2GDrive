@@ -15,9 +15,9 @@ Ready-to-use workflows for downloading files from Direct URLs, YouTube, Telegram
 
 ---
 
-# Usage
+# Usage (One-Time Setup)
 
-## Google Cloud Setup (One-Time)
+## Google Cloud Setup
 
 > **Note:** It is recommended to perform the Google Cloud setup using a clean Google account and a US IP address.
 
