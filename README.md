@@ -221,9 +221,7 @@ with TelegramClient(StringSession(), API_ID, API_HASH) as client:
     print(client.session.save())
 ```
 
-Run:
-
-```bash
+Run: ```bash
 python generate_session.py
 ```
 
