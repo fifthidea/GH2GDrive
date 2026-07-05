@@ -66,7 +66,7 @@ Ready-to-use workflows for downloading files from Direct URLs, YouTube, Telegram
 
 # Generate Google Drive Tokens
 
-This repository includes **token_gen.py**, which automatically generates all required GitHub Secrets.
+This repository includes **`token_gen.py`**, which automatically generates all required GitHub Secrets.
 
 ## Requirements
 
