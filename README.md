@@ -62,8 +62,6 @@ Ready-to-use workflows for downloading files from Direct URLs, YouTube, Telegram
 
 > Only Gmail accounts listed here can generate refresh tokens and access their own Google Drive through this application.
 
----
-
 # Generate Google Drive Tokens
 
 This repository includes **`token_gen.py`**, which automatically generates all required GitHub Secrets.
@@ -96,8 +94,6 @@ GDRIVE_REFRESH_TOKEN = 1//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
 Save these values for GitHub.
-
----
 
 # Configure GitHub
 
@@ -133,7 +129,6 @@ Open the **Actions** tab, select a workflow, click **Run workflow**, fill in the
 
 The uploaded files will appear in your Google Drive when the workflow completes.
 
----
 
 # Workflow Variants
 
@@ -153,8 +148,6 @@ Caches the Python virtual environment and dependencies.
 - Later runs: typically **15–30 seconds faster**.
 
 If you run workflows frequently, the FAST variants are recommended.
-
----
 
 # Google Drive Folder Input
 
