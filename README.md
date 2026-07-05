@@ -248,6 +248,15 @@ if you want to use Telethon, these secrets are required. if not present, it will
 
 ---
 
+### Security Notes
+
+- Never commit your `TG_SESSION`, `GDRIVE_REFRESH_TOKEN`, `GDRIVE_CLIENT_SECRET` and `GDRIVE_CLIENT_ID` to Git.
+- Never share your `TG_SESSION` with anyone. It grants access to your Telegram account.
+- If your session is ever leaked, revoke it from **Telegram → Settings → Devices** and generate a new one.
+- `GDRIVE_REFRESH_TOKEN` can be used to obtain new access tokens without requiring you to log in again.
+Anyone with this token (and the corresponding Client ID and Client Secret) may be able to access your Google Drive data according to the granted OAuth permissions.
+- If you suspect it has been compromised, revoke the application's access from your Google Account (or revoke the OAuth credentials) and generate a new refresh token.
+
 # License
 
 This project is provided as-is. Feel free to modify and use it in your own projects.
