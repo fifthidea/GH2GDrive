@@ -17,7 +17,8 @@ This repository contains ready-to-use workflows for downloading files from multi
 
 ---
 
-# Initial Google Cloud Setup (One-Time)
+# How to use
+## Initial Google Cloud Setup (One-Time)
 
 > **Note:** It is recommended to perform the Google Cloud setup using a clean Google account and a US IP address.
 
@@ -125,9 +126,10 @@ Save these values—you'll need them in GitHub.
 
 ---
 
-# Configure GitHub Secrets
+# Configure GitHub and it's Secrets
 
-Open your repository and navigate to:
+First Fork this repo\
+then Open your repository and navigate to:
 
 ```
 Settings
