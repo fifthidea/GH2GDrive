@@ -194,7 +194,7 @@ If `TG_SESSION`, `TG_API_ID` and `TG_API_HASH` are present as Github secrets, Te
 4. Click **Create application**.
 5. Save **API ID** as `TG_API_ID` and **API Hash** as `TG_API_HASH`.
 
-> Alternatively, You can also use Telegram Desktop's official API
+> Alternatively, You can use Telegram Desktop's official API
 > ```
 > TG_API_ID = 2040
 > TG_API_HASH = b18441a1ff607e10a989891a5462e627
