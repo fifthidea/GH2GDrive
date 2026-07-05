@@ -179,14 +179,7 @@ Telegram/Movies
 
 Telethon is optional. It downloads Telegram posts and media and generally performs better than `yt-dlp`.
 
-If these secrets are present, Telethon will be used; otherwise the workflow falls back to `yt-dlp`.
-
-| Secret               |
-| -------------------- |
-| TG_SESSION           |
-| TG_API_ID            |
-| TG_API_HASH          |
-
+If `TG_SESSION`, `TG_API_ID` and `TG_API_HASH` are present as Github secrets, Telethon will be used; otherwise the workflow falls back to `yt-dlp`.
 
 ## Setting Up Telethon
 
