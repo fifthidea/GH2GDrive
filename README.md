@@ -208,14 +208,14 @@ Install Telethon:
 pip install telethon
 ```
 
-Create `generate_session.py`:
+Create `generate_session.py`, make sure to add your `API_ID` and `API_HASH` values :
 
 ```python
 from telethon.sync import TelegramClient
 from telethon.sessions import StringSession
 
-API_ID = 12345678          # Replace with your API ID
-API_HASH = "your_api_hash" # Replace with your API Hash
+API_ID = 12345678                # Replace with your API ID
+API_HASH = "your_api_hash"       # Replace with your API Hash
 
 with TelegramClient(StringSession(), API_ID, API_HASH) as client:
     print(client.session.save())
