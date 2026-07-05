@@ -221,7 +221,11 @@ with TelegramClient(StringSession(), API_ID, API_HASH) as client:
     print(client.session.save())
 ```
 
-Run: **`python generate_session.py`**
+Run:
+
+```bash
+python generate_session.py
+```
 
 The first time, Telethon asks for your phone number, login code, and 2FA password (if enabled), then prints a string like:
 
